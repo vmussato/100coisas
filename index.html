@@ -104,13 +104,40 @@
 
   /* Cards */
   .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px; }
-  .card { background: var(--card-bg); border: 1.5px solid var(--border); border-radius: 3px; padding: 18px 18px 20px; position: relative; display: flex; flex-direction: column; gap: 7px; transition: border-color .18s, transform .18s, box-shadow .18s; }
+  .card { background: var(--card-bg); border: 1.5px solid var(--border); border-radius: 3px; overflow: hidden; position: relative; display: flex; flex-direction: column; transition: border-color .18s, transform .18s, box-shadow .18s; }
   .card:hover { border-color: var(--sienna); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.06); }
   @media (prefers-reduced-motion: reduce) { .card:hover { transform: none; } }
   .card.done { border-left: 3px solid var(--forest); }
+  .card.has-photo { cursor: pointer; }
+
+  .card-thumb { width: 100%; height: 140px; object-fit: cover; display: block; background: var(--sidebar-bg); }
+
+  .card-body  { padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 7px; flex: 1; }
   .card-num   { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: .08em; font-variant-numeric: tabular-nums; }
   .card-title { font-family: var(--font-display); font-size: .97rem; font-weight: 600; line-height: 1.35; color: var(--ink); }
   .card-check { position: absolute; top: 12px; right: 12px; width: 20px; height: 20px; background: var(--forest); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; }
+  .card-photo-hint { font-family: var(--font-mono); font-size: 9px; color: var(--muted); letter-spacing: .08em; margin-top: auto; }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 200;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+    opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  .modal-backdrop.open { opacity: 1; pointer-events: all; }
+  .modal {
+    background: var(--card-bg); border-radius: 4px; max-width: 680px; width: 100%;
+    max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;
+    transform: translateY(12px); transition: transform .2s;
+  }
+  .modal-backdrop.open .modal { transform: translateY(0); }
+  .modal-img { width: 100%; max-height: 420px; object-fit: cover; display: block; background: var(--sidebar-bg); }
+  .modal-body { padding: 24px 28px 28px; display: flex; flex-direction: column; gap: 8px; }
+  .modal-num   { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: .08em; }
+  .modal-title { font-family: var(--font-display); font-size: 1.3rem; font-weight: 700; color: var(--ink); line-height: 1.2; }
+  .modal-close { align-self: flex-end; background: none; border: 1.5px solid var(--border); border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 14px; color: var(--taupe); display: flex; align-items: center; justify-content: center; transition: border-color .15s, color .15s; margin-bottom: 8px; }
+  .modal-close:hover { border-color: var(--sienna); color: var(--sienna); }
+  .modal-close:focus-visible { outline: 2px solid var(--sienna); outline-offset: 2px; }
 
   footer { margin-top: 64px; padding-top: 28px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
   footer span { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; }
@@ -263,6 +290,18 @@
   </div>
 </div>
 
+<!-- Modal de foto -->
+<div class="modal-backdrop" id="modalBackdrop" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal">
+    <img class="modal-img" id="modalImg" src="" alt="" />
+    <div class="modal-body">
+      <button class="modal-close" id="modalClose" aria-label="Fechar">✕</button>
+      <p class="modal-num" id="modalNum"></p>
+      <p class="modal-title" id="modalTitle"></p>
+    </div>
+  </div>
+</div>
+
 <!-- ══ LOGIN ══ -->
 <div id="viewLogin" class="view">
   <div class="login-view">
@@ -365,10 +404,11 @@ function parseCSV(text) {
         else { cur += ch; }
       }
       cols.push(cur.trim());
-      const n    = parseInt(cols[0]);
+      const n     = parseInt(cols[0]);
       const title = cols[1] || '';
       const done  = (cols[2] || '').toLowerCase().trim() === 's';
-      return { n, title, done };
+      const photo = (cols[3] || '').trim();
+      return { n, title, done, photo };
     })
     .filter(item => !isNaN(item.n) && item.title);
 }
@@ -475,13 +515,28 @@ function renderPublic() {
 }
 
 function renderCards() {
-  document.getElementById('cardsGrid').innerHTML = items.map(item => `
-    <article class="card${item.done ? ' done' : ''}">
-      <span class="card-num">${String(item.n).padStart(2,'0')}</span>
-      <p class="card-title">${escHtml(item.title)}</p>
-      ${item.done ? '<span class="card-check" aria-label="Concluído">✓</span>' : ''}
-    </article>
-  `).join('');
+  document.getElementById('cardsGrid').innerHTML = items.map(item => {
+    const hasPhoto = item.done && item.photo;
+    return `
+      <article class="card${item.done ? ' done' : ''}${hasPhoto ? ' has-photo' : ''}"
+        ${hasPhoto ? `data-n="${item.n}" role="button" tabindex="0" aria-label="Ver foto: ${escHtml(item.title)}"` : ''}>
+        ${hasPhoto ? `<img class="card-thumb" src="${escHtml(item.photo)}" alt="${escHtml(item.title)}" loading="lazy" />` : ''}
+        <div class="card-body">
+          <span class="card-num">${String(item.n).padStart(2,'0')}</span>
+          <p class="card-title">${escHtml(item.title)}</p>
+          ${hasPhoto ? '<span class="card-photo-hint">ver foto →</span>' : ''}
+        </div>
+        ${item.done ? '<span class="card-check" aria-label="Concluído">✓</span>' : ''}
+      </article>
+    `;
+  }).join('');
+
+  // Abre modal ao clicar num card com foto
+  document.querySelectorAll('.card.has-photo').forEach(card => {
+    const open = () => openModal(+card.dataset.n);
+    card.addEventListener('click', open);
+    card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') open(); });
+  });
 }
 
 function renderSidebar() {
@@ -563,6 +618,29 @@ document.getElementById('reloadBtn').addEventListener('click', async () => {
   renderAdmin();
   renderPublic();
 });
+
+// ── Modal ─────────────────────────────────────────────
+const modalBackdrop = document.getElementById('modalBackdrop');
+
+function openModal(n) {
+  const item = items.find(i => i.n === n);
+  if (!item || !item.photo) return;
+  document.getElementById('modalImg').src   = item.photo;
+  document.getElementById('modalImg').alt   = item.title;
+  document.getElementById('modalNum').textContent   = String(item.n).padStart(2,'0');
+  document.getElementById('modalTitle').textContent = item.title;
+  modalBackdrop.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModal() {
+  modalBackdrop.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+document.getElementById('modalClose').addEventListener('click', closeModal);
+modalBackdrop.addEventListener('click', e => { if (e.target === modalBackdrop) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
 // ── Helpers ───────────────────────────────────────────
 function escHtml(s) {
