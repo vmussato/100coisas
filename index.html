@@ -820,20 +820,26 @@ function openDrawer(n) {
   saveMsg.textContent = '';
   saveMsg.className   = 'drawer-save-msg';
 
-  if (token) {
-    // modo edição
-    const hasPhoto = item.done && item.photo;
+  const hasPhoto  = item.done && item.photo;
+  const canEdit   = isAuthed();
+  const photoHtml = hasPhoto
+    ? `<img src="${escHtml(item.photo)}" alt="${escHtml(item.title)}" style="width:100%;border-radius:3px;object-fit:cover;max-height:220px;display:block;" loading="lazy" />`
+    : '';
+
+  if (canEdit) {
+    // modo edição (logado como admin)
     body.innerHTML = `
-      ${hasPhoto ? `<img src="${escHtml(item.photo)}" alt="${escHtml(item.title)}" style="width:100%;border-radius:3px;object-fit:cover;max-height:220px;display:block;" loading="lazy" />` : ''}
+      ${photoHtml}
       <p class="drawer-story-label">História / Memória</p>
       <textarea class="drawer-textarea" id="drawerTextarea" placeholder="Escreva sobre esta experiência...">${escHtml(storyText)}</textarea>
+      ${!token ? '<p class="drawer-story-empty" style="font-size:12px;margin-top:-8px">Configure o token do GitHub no painel admin para habilitar o salvamento.</p>' : ''}
     `;
     footer.style.display = '';
+    document.getElementById('drawerSaveBtn').disabled = !token;
   } else {
-    // modo leitura
-    const hasPhoto = item.done && item.photo;
+    // modo leitura (visitante)
     body.innerHTML = `
-      ${hasPhoto ? `<img src="${escHtml(item.photo)}" alt="${escHtml(item.title)}" style="width:100%;border-radius:3px;object-fit:cover;max-height:220px;display:block;" loading="lazy" />` : ''}
+      ${photoHtml}
       <p class="drawer-story-label">História / Memória</p>
       ${storyText
         ? `<p class="drawer-story-readonly">${escHtml(storyText)}</p>`
